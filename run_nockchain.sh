@@ -1,64 +1,49 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
-# 0) Prerequisites check
+# 1) Prerequisites
 for cmd in git make cargo; do
-  if ! command -v $cmd &>/dev/null; then
+  if ! command -v "$cmd" &>/dev/null; then
     echo "Error: '$cmd' is not installed. Please install it first." >&2
     exit 1
   fi
 done
 
-# 1) Ensure 'choo' (Hoon compiler) is installed
-if ! command -v choo &>/dev/null; then
-  echo "🔧 'choo' not found — installing from zorp-corp/nockapp..."
-  TMP="$(mktemp -d)"
-  git clone https://github.com/zorp-corp/nockapp.git "$TMP"
-  cd "$TMP"/apps/choo
-  cargo build --release
-  echo "📦 Installing choo to /usr/local/bin (requires sudo)..."
-  sudo install -m 755 target/release/choo /usr/local/bin/choo
-  cd - >/dev/null
-  rm -rf "$TMP"
-  echo "✅ choo installed!"
-fi
+# 2) Install choo via your Makefile
+echo "🔧 Installing choo (Hoon compiler)…"
+make install-choo
 
-# 2) Ask for your mining pubkey (or use default)
+# 3) Prompt for mining pubkey and ports
 DEFAULT_PUBKEY="EHmKL2U3vXfS5GYAY5aVnGdukfDWwvkQPCZXnjvZVShsSQi3UAuA4tQQpVwGJMzc9FfpTY8pLDkqhBGfWutiF4prrCktUH9oAWJxkXQBzAavKDc95NR3DjmYwnnw8GuugnK"
-read -p "Enter your mining pubkey (leave blank for default): " MINING_PUBKEY
-MINING_PUBKEY=${MINING_PUBKEY:-$DEFAULT_PUBKEY}
+read -rp "Enter your mining pubkey (leave blank for default): " MINING_PUBKEY
+MINING_PUBKEY="${MINING_PUBKEY:-$DEFAULT_PUBKEY}"
 
-# 3) Ask for UDP ports
-read -p "Enter leader UDP port to peer to [3005]: " LEADER_PORT
-LEADER_PORT=${LEADER_PORT:-3005}
-read -p "Enter follower UDP port [3006]: " FOLLOWER_PORT
-FOLLOWER_PORT=${FOLLOWER_PORT:-3006}
+read -rp "Enter leader UDP port to peer to [3005]: " LEADER_PORT
+LEADER_PORT="${LEADER_PORT:-3005}"
+read -rp "Enter follower UDP port [3006]: " FOLLOWER_PORT
+FOLLOWER_PORT="${FOLLOWER_PORT:-3006}"
 
-# 4) Clone or update Nockchain
-if [ -d nockchain ]; then
-  echo "🔄 Updating existing nockchain repo…"
-  cd nockchain && git pull && cd ..
-else
-  echo "🌱 Cloning nockchain repo…"
-  git clone https://github.com/zorp-corp/nockchain.git
-fi
+# 4) Fresh clone of Nockchain
+echo "🌱 Removing any existing nockchain/ folder and cloning fresh…"
+rm -rf nockchain
+git clone https://github.com/zorp-corp/nockchain.git
 
-# 5) Build Nockchain
+# 5) Build from scratch
 echo "🛠️  Building nockchain…"
-cd nockchain
-make build-hoon-all
-make build
-cd ..
+pushd nockchain >/dev/null
+  make build-hoon-all
+  make build
+popd >/dev/null
 
-# 6) Start follower
-echo "🚀 Starting follower on UDP port $FOLLOWER_PORT (peering to leader at port $LEADER_PORT)…"
+# 6) Launch follower node
+echo "🚀 Starting follower on UDP port ${FOLLOWER_PORT}, peering to leader:${LEADER_PORT}"
 cd nockchain
 RUST_BACKTRACE=1 cargo run --release --bin nockchain -- \
   --fakenet \
   --genesis-watcher \
   --npc-socket nockchain.sock \
-  --mining-pubkey "$MINING_PUBKEY" \
-  --bind /ip4/0.0.0.0/udp/$FOLLOWER_PORT/quic-v1 \
-  --peer /ip4/127.0.0.1/udp/$LEADER_PORT/quic-v1 \
+  --mining-pubkey "${MINING_PUBKEY}" \
+  --bind "/ip4/0.0.0.0/udp/${FOLLOWER_PORT}/quic-v1" \
+  --peer "/ip4/127.0.0.1/udp/${LEADER_PORT}/quic-v1" \
   --new-peer-id \
   --no-default-peers
