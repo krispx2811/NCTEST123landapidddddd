@@ -9,26 +9,27 @@ for cmd in git make cargo; do
   fi
 done
 
-# 2) Install choo via your Makefile
+# 2) Fresh clone of Nockchain
+echo "🌱 Cloning fresh nockchain repo…"
+rm -rf nockchain
+git clone https://github.com/zorp-corp/nockchain.git
+
+# 3) Install choo via your Makefile
 echo "🔧 Installing choo (Hoon compiler)…"
 make install-choo
 
-# 3) Prompt for mining pubkey and ports
+# 4) Prompt for mining pubkey and ports
 DEFAULT_PUBKEY="EHmKL2U3vXfS5GYAY5aVnGdukfDWwvkQPCZXnjvZVShsSQi3UAuA4tQQpVwGJMzc9FfpTY8pLDkqhBGfWutiF4prrCktUH9oAWJxkXQBzAavKDc95NR3DjmYwnnw8GuugnK"
 read -rp "Enter your mining pubkey (leave blank for default): " MINING_PUBKEY
 MINING_PUBKEY="${MINING_PUBKEY:-$DEFAULT_PUBKEY}"
 
 read -rp "Enter leader UDP port to peer to [3005]: " LEADER_PORT
 LEADER_PORT="${LEADER_PORT:-3005}"
+
 read -rp "Enter follower UDP port [3006]: " FOLLOWER_PORT
 FOLLOWER_PORT="${FOLLOWER_PORT:-3006}"
 
-# 4) Fresh clone of Nockchain
-echo "🌱 Removing any existing nockchain/ folder and cloning fresh…"
-rm -rf nockchain
-git clone https://github.com/zorp-corp/nockchain.git
-
-# 5) Build from scratch
+# 5) Build Nockchain
 echo "🛠️  Building nockchain…"
 pushd nockchain >/dev/null
   make build-hoon-all
